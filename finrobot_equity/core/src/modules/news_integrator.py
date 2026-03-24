@@ -456,7 +456,7 @@ def get_enhanced_company_news(ticker: str, api_key: str, days_back: int = 5,
         to_date = end_date.strftime('%Y-%m-%d')
         
         # 获取新闻
-        url = "https://financialmodelingprep.com/api/v3/stock_news"
+        url = "https://financialmodelingprep.com/stable/fmp-articles"
         params = {
             'tickers': ticker,
             'from': from_date,
@@ -469,6 +469,15 @@ def get_enhanced_company_news(ticker: str, api_key: str, days_back: int = 5,
         response = requests.get(url, params=params)
         response.raise_for_status()
         raw_news = response.json()
+
+        # Normalize fmp-articles fields to match expected schema
+        for article in raw_news:
+            if 'text' not in article:
+                article['text'] = article.get('content', '')
+            if 'publishedDate' not in article:
+                article['publishedDate'] = article.get('date', '')
+            if 'url' not in article:
+                article['url'] = article.get('link', '')
         
         if not raw_news:
             logger.warning(f"No news found for {ticker}")

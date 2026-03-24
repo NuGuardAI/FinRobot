@@ -87,6 +87,13 @@ python finrobot_equity/core/src/create_equity_report.py \
     --company-name "NVIDIA Corporation" \
     --analysis-csv output/NVDA/analysis/financial_metrics_and_forecasts.csv \
     --ratios-csv output/NVDA/analysis/ratios_raw_data.csv \
+    --tagline-file output/NVDA/analysis/tagline.txt \
+    --company-overview-file output/NVDA/analysis/company_overview.txt \
+    --investment-overview-file output/NVDA/analysis/investment_overview.txt \
+    --valuation-overview-file output/NVDA/analysis/valuation_overview.txt \
+    --risks-file output/NVDA/analysis/risks.txt \
+    --competitor-analysis-file output/NVDA/analysis/competitor_analysis.txt \
+    --major-takeaways-file output/NVDA/analysis/major_takeaways.txt \
     --config-file finrobot_equity/core/config/config.ini
 ```
 

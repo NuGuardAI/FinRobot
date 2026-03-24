@@ -34,7 +34,7 @@ class FMPUtils:
     ) -> str:
         """Get the target price for a given stock on a given date"""
         # API URL
-        url = f"https://financialmodelingprep.com/api/v4/price-target?symbol={ticker_symbol}&apikey={fmp_api_key}"
+        url = f"https://financialmodelingprep.com/stable/price-target-summary?symbol={ticker_symbol}&apikey={fmp_api_key}"
 
         # 发送GET请求
         price_target = "Not Given"
@@ -44,17 +44,15 @@ class FMPUtils:
         if response.status_code == 200:
             # 解析JSON数据
             data = response.json()
-            est = []
-
-            date = datetime.strptime(date, "%Y-%m-%d")
-            for tprice in data:
-                tdate = tprice["publishedDate"].split("T")[0]
-                tdate = datetime.strptime(tdate, "%Y-%m-%d")
-                if abs((tdate - date).days) <= 999:
-                    est.append(tprice["priceTarget"])
-
-            if est:
-                price_target = f"{np.min(est)} - {np.max(est)} (md. {np.median(est)})"
+            if data and isinstance(data, list) and len(data) > 0:
+                summary = data[0]
+                avg = summary.get("lastMonthAvgPriceTarget") or summary.get("lastQuarterAvgPriceTarget")
+                low = summary.get("lastMonthMinPriceTarget") or summary.get("lastQuarterMinPriceTarget")
+                high = summary.get("lastMonthMaxPriceTarget") or summary.get("lastQuarterMaxPriceTarget")
+                if avg is not None:
+                    price_target = f"{low} - {high} (md. {avg})" if low and high else str(avg)
+                else:
+                    price_target = "N/A"
             else:
                 price_target = "N/A"
         else:
@@ -71,7 +69,7 @@ class FMPUtils:
     ) -> str:
         """Get the url and filing date of the 10-K report for a given stock and year"""
 
-        url = f"https://financialmodelingprep.com/api/v3/sec_filings/{ticker_symbol}?type=10-k&page=0&apikey={fmp_api_key}"
+        url = f"https://financialmodelingprep.com/stable/sec-filings?symbol={ticker_symbol}&type=10-K&page=0&apikey={fmp_api_key}"
 
         # 发送GET请求
         filing_url = None
@@ -101,8 +99,8 @@ class FMPUtils:
         date: Annotated[str, "date of the market cap, should be 'yyyy-mm-dd'"],
     ) -> str:
         """Get the historical market capitalization for a given stock on a given date"""
-        date = get_next_weekday(date).strftime("%Y-%m-%d")
-        url = f"https://financialmodelingprep.com/api/v3/historical-market-capitalization/{ticker_symbol}?limit=100&from={date}&to={date}&apikey={fmp_api_key}"
+        target_date = get_next_weekday(date).strftime("%Y-%m-%d")
+        url = f"https://financialmodelingprep.com/stable/historical-market-capitalization?symbol={ticker_symbol}&limit=2000&apikey={fmp_api_key}"
 
         # 发送GET请求
         mkt_cap = None
@@ -112,7 +110,11 @@ class FMPUtils:
         if response.status_code == 200:
             # 解析JSON数据
             data = response.json()
-            mkt_cap = data[0]["marketCap"]
+            if not data:
+                return "No data available"
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+            closest = min(data, key=lambda x: abs((datetime.strptime(x["date"], "%Y-%m-%d") - target_dt).days))
+            mkt_cap = closest["marketCap"]
             return mkt_cap
         else:
             return f"Failed to retrieve data: {response.status_code}"
@@ -123,7 +125,7 @@ class FMPUtils:
     ) -> str:
         """Get the historical book value per share for a given stock on a given date"""
         # 从FMP API获取历史关键财务指标数据
-        url = f"https://financialmodelingprep.com/api/v3/key-metrics/{ticker_symbol}?limit=40&apikey={fmp_api_key}"
+        url = f"https://financialmodelingprep.com/stable/key-metrics?symbol={ticker_symbol}&limit=40&apikey={fmp_api_key}"
         response = requests.get(url)
         data = response.json()
 
@@ -152,18 +154,18 @@ class FMPUtils:
     ) -> pd.DataFrame:
         """Get the financial metrics for a given stock for the last 'years' years"""
         # Base URL setup for FMP API
-        base_url = "https://financialmodelingprep.com/api/v3"
+        base_url = "https://financialmodelingprep.com/stable"
         # Create DataFrame
         df = pd.DataFrame()
 
         # Iterate over the last 'years' years of data
         for year_offset in range(years):
             # Construct URL for income statement and ratios for each year
-            income_statement_url = f"{base_url}/income-statement/{ticker_symbol}?limit={years}&apikey={fmp_api_key}"
+            income_statement_url = f"{base_url}/income-statement?symbol={ticker_symbol}&limit={years}&apikey={fmp_api_key}"
             ratios_url = (
-                f"{base_url}/ratios/{ticker_symbol}?limit={years}&apikey={fmp_api_key}"
+                f"{base_url}/ratios?symbol={ticker_symbol}&limit={years}&apikey={fmp_api_key}"
             )
-            key_metrics_url = f"{base_url}/key-metrics/{ticker_symbol}?limit={years}&apikey={fmp_api_key}"
+            key_metrics_url = f"{base_url}/key-metrics?symbol={ticker_symbol}&limit={years}&apikey={fmp_api_key}"
 
             # Requesting data from the API
             income_data = requests.get(income_statement_url).json()
@@ -203,15 +205,15 @@ class FMPUtils:
         years: Annotated[int, "number of the years to search from, default to 4"] = 4
     ) -> dict:
         """Get financial metrics for the company and its competitors."""
-        base_url = "https://financialmodelingprep.com/api/v3"
+        base_url = "https://financialmodelingprep.com/stable"
         all_data = {}
 
         symbols = [ticker_symbol] + competitors  # Combine company and competitors into one list
     
         for symbol in symbols:
-            income_statement_url = f"{base_url}/income-statement/{symbol}?limit={years}&apikey={fmp_api_key}"
-            ratios_url = f"{base_url}/ratios/{symbol}?limit={years}&apikey={fmp_api_key}"
-            key_metrics_url = f"{base_url}/key-metrics/{symbol}?limit={years}&apikey={fmp_api_key}"
+            income_statement_url = f"{base_url}/income-statement?symbol={symbol}&limit={years}&apikey={fmp_api_key}"
+            ratios_url = f"{base_url}/ratios?symbol={symbol}&limit={years}&apikey={fmp_api_key}"
+            key_metrics_url = f"{base_url}/key-metrics?symbol={symbol}&limit={years}&apikey={fmp_api_key}"
 
             income_data = requests.get(income_statement_url).json()
             ratios_data = requests.get(ratios_url).json()
